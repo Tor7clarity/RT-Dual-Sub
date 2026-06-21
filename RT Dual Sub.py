@@ -6,18 +6,16 @@ import tkinter as tk
 from tkinter import filedialog
 
 def get_current_dir():
-    """Gets the folder where the EXE or script is physically located"""
     if getattr(sys, 'frozen', False):
         return os.path.dirname(os.path.abspath(sys.executable))
     else:
         return os.path.dirname(os.path.abspath(__file__))
 
 def select_folder_via_gui(initial_dir):
-    """Brings up a Windows Folder Selection dialog if the tool looks in the wrong place"""
     print(" Launching folder selector... Please choose the folder containing your subtitles.")
     root = tk.Tk()
-    root.withdraw() # Hide the main tiny tkinter window
-    root.attributes('-topmost', True) # Bring the folder picker to the front
+    root.withdraw()
+    root.attributes('-topmost', True)
     
     selected_dir = filedialog.askdirectory(
         title="Select the folder containing your subtitle JSON files",
@@ -26,7 +24,6 @@ def select_folder_via_gui(initial_dir):
     return selected_dir
 
 def get_language_files(base_dir):
-    """Scans the designated folder for actual game language files"""
     try:
         all_files = [f for f in os.listdir(base_dir) if f.endswith('.json')]
     except Exception as e:
@@ -34,20 +31,17 @@ def get_language_files(base_dir):
         return []
         
     lang_files = []
-    # Exclude non-language assets
     exclude_files = ['sound.json', 'merged_subtitles.json', 'manifest.json', 'config.json', 'ctac.json', 'ecoscore_config.json']
     
     for f in all_files:
         f_lower = f.lower()
         if f_lower in exclude_files or f_lower.startswith('merged_'):
             continue
-        # Only include actual language files (like zhCN.json, enGB.json, trTR.json)
         lang_files.append(f)
             
     return sorted(lang_files)
 
 def merge_logic(dir_path, file1, file2, output_file):
-    """Core merging logic"""
     path1 = os.path.join(dir_path, file1)
     path2 = os.path.join(dir_path, file2)
     path_out = os.path.join(dir_path, output_file)
@@ -107,11 +101,9 @@ def main():
     print("      Bilingual Subtitle JSON Merger (v1.5)")
     print("="*50)
     
-    # 1. Try automatic detection first
     current_dir = get_current_dir()
     files = get_language_files(current_dir)
     
-    # 2. If it scanned system telemetry files or nothing instead of your subtitles, force a manual pick
     if not files or "DefaultQuestions.json" in os.listdir(current_dir) or "ctac.json" in files:
         print(" Automatic path detection mismatched Windows environment.")
         current_dir = select_folder_via_gui(current_dir)
