@@ -76,14 +76,18 @@ def merge_logic(dir_path, file1, file2, output_file):
             offset = item2.get("Offset", 0)
 
         if text1 and text2:
-            if text1 != text2:
-                merged_text = f"{text1}({text2})"
-            else:
+        if text1 and text2:
+            if text1 == text2 or text1.strip() == text2.strip():
                 merged_text = text1
+            elif text1.replace(" ", "").replace("\n", "") == text2.replace(" ", "").replace("\n", ""):
+                merged_text = text1
+            else:
+                merged_text = f"{text1}({text2})"
         elif text1:
             merged_text = text1
         else:
             merged_text = text2
+            
 
         merged_data[key] = {
             "Offset": offset,
