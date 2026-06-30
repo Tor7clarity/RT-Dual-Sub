@@ -4,18 +4,170 @@ import sys
 import traceback
 import tkinter as tk
 from tkinter import filedialog
+import re
+
+# RichText 标签
+TAG_RE = re.compile(r"<[^>]+>")
+
+# 游戏变量
+VAR_RE = re.compile(r"\{[^}]+\}")
+
+# 连续空白
+SPACE_RE = re.compile(r"\s+")
+
+COMMON_PREFIX1 = "<b>{source}</b>: <b>{text}</b>"
+COMMON_PREFIX2 = "<b>{source}</b>：<b>{text}</b>"
+
+SUCCESS_PREFIX1 = '<color=#67ee70><link="{0}">[{1}：'
+SUCCESS_PREFIX2 = '<color=#67ee70><link="{0}">[{1}: '
+
+SUCCESS_PREFIX1 = '<color=#67ee70><link="{0}">[{1}：'
+SUCCESS_PREFIX2 = '<color=#67ee70><link="{0}">[{1}: '
+
+def merge_success_text(text1, text2):
+
+    if text1.startswith(SUCCESS_PREFIX1) or text1.startswith(SUCCESS_PREFIX2):
+
+        if text2.startswith(SUCCESS_PREFIX1):
+            text2 = text2[len(SUCCESS_PREFIX1):]
+
+        elif text2.startswith(SUCCESS_PREFIX2):
+            text2 = text2[len(SUCCESS_PREFIX2):]
+
+        else:
+            return None
+
+        # 只保留前半部分（语言文字）
+        text2 = text2.split("]")[0].strip()
+
+        # 插入到 text1 第一个 ] 前
+        pos = text1.find("]")
+
+        return text1[:pos] + f"({text2})" + text1[pos:]
+
+    return None
+
+def remove_common_prefix(text1, text2):
+    """
+    如果 text1 和 text2 都以公共模板开头，
+    就去掉 text2 的公共模板，只保留后面的中文。
+    """
+
+    if text2.startswith(COMMON_PREFIX1):
+        text2 = text2[len(COMMON_PREFIX1):].lstrip()
+
+    if text2.startswith(COMMON_PREFIX2):
+        text2 = text2[len(COMMON_PREFIX2):].lstrip()
+
+    return text1, text2
+
+
+def normalize_text(text: str) -> str:
+    """用于比较，不改变原文"""
+
+    text = TAG_RE.sub("", text)
+    text = VAR_RE.sub("", text)
+
+    text = text.replace("\r", "")
+    text = text.replace("\n", " ")
+    text = text.replace("：", ":")
+
+    text = SPACE_RE.sub(" ", text)
+
+    return text.strip().lower()
+
+
+def split_lines(text):
+    return [i.strip() for i in text.splitlines() if i.strip()]
+
+
+def unique_lines(lines):
+    result = []
+
+    seen = set()
+
+    for line in lines:
+
+        key = normalize_text(line)
+
+        if key not in seen:
+            seen.add(key)
+            result.append(line)
+
+    return result
+
+
+def merge_text(text1, text2):
+
+    text1, text2 = remove_common_prefix(text1, text2)
+    result = merge_success_text(text1, text2)
+    if result is not None:
+        return result
+    
+    if not text1:
+        return text2
+
+    if not text2:
+        return text1
+
+    n1 = normalize_text(text1)
+    n2 = normalize_text(text2)
+
+    # 完全一致
+    if n1 == n2:
+        return text1
+
+    # 一方已经包含另一方
+    if n2 in n1:
+        return text1
+
+    if n1 in n2:
+        return text2
+
+    lines1 = unique_lines(split_lines(text1))
+    lines2 = unique_lines(split_lines(text2))
+
+    # 去掉已经存在的中文
+    exist = {normalize_text(i) for i in lines1}
+
+    append = []
+
+    for line in lines2:
+        if normalize_text(line) not in exist:
+            append.append(line)
+
+    # 没有新增内容
+    if not append:
+        return text1
+
+    # 一个语言对应一个语言（最常见）
+    if len(lines1) == 1 and len(append) == 1:
+        return f"{lines1[0]}({append[0]})"
+
+    # 多行情况
+    result = []
+
+    for line in lines1:
+        result.append(line)
+
+    for line in append:
+        result.append(f"({line})")
+
+    return " ".join(result)
 
 def get_current_dir():
+    """Gets the folder where the EXE or script is physically located"""
     if getattr(sys, 'frozen', False):
         return os.path.dirname(os.path.abspath(sys.executable))
     else:
         return os.path.dirname(os.path.abspath(__file__))
 
 def select_folder_via_gui(initial_dir):
+    """Brings up a Windows Folder Selection dialog if the tool looks in the wrong place"""
     print(" Launching folder selector... Please choose the folder containing your subtitles.")
     root = tk.Tk()
-    root.withdraw()
-    root.attributes('-topmost', True)
+    root.withdraw() # Hide the main tiny tkinter window
+    root.attributes('-topmost', True) # Bring the folder picker to the front
     
     selected_dir = filedialog.askdirectory(
         title="Select the folder containing your subtitle JSON files",
@@ -24,6 +176,7 @@ def select_folder_via_gui(initial_dir):
     return selected_dir
 
 def get_language_files(base_dir):
+    """Scans the designated folder for actual game language files"""
     try:
         all_files = [f for f in os.listdir(base_dir) if f.endswith('.json')]
     except Exception as e:
@@ -31,17 +184,20 @@ def get_language_files(base_dir):
         return []
         
     lang_files = []
+    # Exclude non-language assets
     exclude_files = ['sound.json', 'merged_subtitles.json', 'manifest.json', 'config.json', 'ctac.json', 'ecoscore_config.json']
     
     for f in all_files:
         f_lower = f.lower()
         if f_lower in exclude_files or f_lower.startswith('merged_'):
             continue
+        # Only include actual language files (like zhCN.json, enGB.json, trTR.json)
         lang_files.append(f)
             
     return sorted(lang_files)
 
 def merge_logic(dir_path, file1, file2, output_file):
+    """Core merging logic"""
     path1 = os.path.join(dir_path, file1)
     path2 = os.path.join(dir_path, file2)
     path_out = os.path.join(dir_path, output_file)
@@ -75,19 +231,7 @@ def merge_logic(dir_path, file1, file2, output_file):
         elif isinstance(item2, dict):
             offset = item2.get("Offset", 0)
 
-        if text1 and text2:
-        if text1 and text2:
-            if text1 == text2 or text1.strip() == text2.strip():
-                merged_text = text1
-            elif text1.replace(" ", "").replace("\n", "") == text2.replace(" ", "").replace("\n", ""):
-                merged_text = text1
-            else:
-                merged_text = f"{text1}({text2})"
-        elif text1:
-            merged_text = text1
-        else:
-            merged_text = text2
-            
+        merged_text = merge_text(text1, text2)
 
         merged_data[key] = {
             "Offset": offset,
@@ -105,9 +249,11 @@ def main():
     print("      Bilingual Subtitle JSON Merger (v1.5)")
     print("="*50)
     
+    # 1. Try automatic detection first
     current_dir = get_current_dir()
     files = get_language_files(current_dir)
     
+    # 2. If it scanned system telemetry files or nothing instead of your subtitles, force a manual pick
     if not files or "DefaultQuestions.json" in os.listdir(current_dir) or "ctac.json" in files:
         print(" Automatic path detection mismatched Windows environment.")
         current_dir = select_folder_via_gui(current_dir)
