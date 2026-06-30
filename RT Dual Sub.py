@@ -37,11 +37,7 @@ def merge_success_text(text1, text2):
     return None
 
 def remove_common_prefix(text1, text2):
-    """
-    如果 text1 和 text2 都以公共模板开头，
-    就去掉 text2 的公共模板，只保留后面的中文。
-    """
-
+    
     for prefix in (COMMON_PREFIX1, COMMON_PREFIX2):
         if text2.startswith(prefix):
             text2 = text2[len(prefix):].lstrip()
@@ -133,14 +129,14 @@ def merge_text(text1, text2):
     return " ".join(result)
 
 def get_current_dir():
-    """Gets the folder where the EXE or script is physically located"""
+    
     if getattr(sys, 'frozen', False):
         return os.path.dirname(os.path.abspath(sys.executable))
     else:
         return os.path.dirname(os.path.abspath(__file__))
 
 def select_folder_via_gui(initial_dir):
-    """Brings up a Windows Folder Selection dialog if the tool looks in the wrong place"""
+
     print(" Launching folder selector... Please choose the folder containing your subtitles.")
     root = tk.Tk()
     root.withdraw() 
@@ -153,7 +149,7 @@ def select_folder_via_gui(initial_dir):
     return selected_dir
 
 def get_language_files(base_dir):
-    """Scans the designated folder for actual game language files"""
+
     try:
         all_files = [f for f in os.listdir(base_dir) if f.endswith('.json')]
     except Exception as e:
@@ -172,7 +168,7 @@ def get_language_files(base_dir):
     return sorted(lang_files)
 
 def merge_logic(dir_path, file1, file2, output_file):
-    """Core merging logic"""
+
     path1 = os.path.join(dir_path, file1)
     path2 = os.path.join(dir_path, file2)
     path_out = os.path.join(dir_path, output_file)
@@ -236,12 +232,14 @@ def main():
         files = get_language_files(current_dir)
 
     print(f"\nTarget Folder: {current_dir}")
+
     if not files:
         print(" No valid language JSON files found in the selected directory.")
         print(" Make sure the folder contains files like zhCN.json, enGB.json, etc.")
         return
 
     print("\nAvailable language files detected:")
+    
     for idx, f in enumerate(files):
         print(f" [{idx + 1}] {f}")
 
